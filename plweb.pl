@@ -129,9 +129,16 @@ serve_page(_, Request) :-
 %%	find_file(+Relative, -File) is det.
 %
 %	Translate Relative into a File in the document-root tree. If the
-%	given extension is .html, also look for   .txt files that can be
-%	translated into HTML.
-
+%	given extension is .html, also look for .frg and .txt files that
+%	can be translated into HTML.
+find_file(Relative, File) :-
+	file_name_extension(Base, html, Relative),
+	file_name_extension(Base, frg, WikiFile),
+	absolute_file_name(document_root(WikiFile),
+			   File,
+			   [ access(read),
+			     file_errors(fail)
+			   ]), !.
 find_file(Relative, File) :-
 	file_name_extension(Base, html, Relative),
 	file_name_extension(Base, txt, WikiFile),
@@ -172,6 +179,12 @@ serve_file('',  Dir, Request) :-
 	->  true
 	;   http_reply_dirindex(Dir, [unsafe(true)], Request)
 	).
+serve_file(frg, File, _Request) :-
+	read_file_to_terms(File, [Term|_], []),
+	b_setval(pldoc_file, File), % voodoo, pray for my immortal soul
+	call_cleanup(serve_fragment(Term),
+		     nb_delete(pldoc_file)).
+
 serve_file(txt, File, Request) :-
 	http_parameters(Request,
 			[ format(Format, [ oneof([raw,html]),
@@ -203,6 +216,21 @@ ensure_slash(Dir, Dir) :-
 ensure_slash(Dir0, Dir) :-
 	atom_concat(Dir0, /, Dir).
 
+%%	serve_fragment(+String, +File, +Request) is det.
+%
+%	Fake out the wiki page emitter for special pages
+%	that are too complex for twiki markup
+
+serve_fragment(DOM) :-
+	(   sub_term(h1(_, Title), DOM)
+	->  true
+	;   Title = 'SWI-Prolog'
+	),
+	setup_call_cleanup(b_setval(pldoc_options,
+				    [ prefer(manual)
+				    ]),
+			   serve_wiki_page(Title, DOM),
+			   nb_delete(pldoc_options)).
 
 %%	serve_wiki(+String, +File, +Request) is det.
 %
