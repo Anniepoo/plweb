@@ -42,6 +42,11 @@
 :- use_module(library(filesex)).
 :- use_module(wiki).
 
+
+% Although orphaned, the old download scheme is retained for those with
+% build scripts
+
+
 %%	download(+Request) is det.
 %
 %	HTTP handler for SWI-Prolog download pages.
