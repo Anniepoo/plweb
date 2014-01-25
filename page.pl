@@ -375,7 +375,11 @@ submenu_label(Label, _) -->
 menu(Style,
      [ 'Home'                = '/',
        'Download' =
-       [ 'SWI-Prolog'	     = '/Download.html',
+       [ 'SWI-Prolog'	     =
+	 [ 'Windows' = '/Dlwindows.html',
+	   'Mac OS' = '/Dlmac.html',
+	   'Linux' = '/Dllinux.html'
+	 ],
 	 'Sources/building'  = '/build/',
 	 'Add-ons'           = '/pack/list',
 	 'Browse GIT'	     = '/git/'
