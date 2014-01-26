@@ -44,7 +44,7 @@
 :- use_module(library(http/html_head)).
 :- use_module(wiki).
 
-
+%
 %%	download(+Request) is det.
 %
 %	HTTP handler for SWI-Prolog download pages.
