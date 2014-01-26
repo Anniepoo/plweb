@@ -42,6 +42,13 @@
 :- use_module(library(option)).
 :- use_module(library(apply)).
 
+/** <module> SWI-Prolog website autocompletion support
+
+This module provides the handler for =/autocomplete/ac_predicate=, which
+implements autocompletion for the website. This   handler is called from
+searchbox_script//1 in page.pl.
+*/
+
 :- multifile
 	prolog:doc_search_field//1,
 	prolog:ac_object/3,			% +How, +Search, -Name-Object
@@ -56,10 +63,11 @@ max_results_displayed(100).
 
 %%	prolog:doc_search_field(+Options) is det.
 %
-%	Emit the manual-search field.
-%
-%     Is this called?  AO - 7/21/2013
-%
+%	Emit the manual-search field.  This  is   a  hook  into PlDoc to
+%	override the PlDoc search field. In  theory, all searches on the
+%	website should now  be  using  the   search  box  as  defined in
+%	page.pl.  See searchbox_script//1.
+
 prolog:doc_search_field(Options) -->
 	{ option(id(Id), Options),
 	  http_link_to_id(ac_predicate, [], URL)
@@ -140,12 +148,12 @@ first_results(Max, Completions, Results) :-
 	first_n(Max, Completions, FirstN),
 	maplist(obj_result, FirstN, Results).
 
-obj_result(_Name-Obj, json([ label=Label,
-			     class=Type,
-			     href=Href
-			   | Extra
-			   ])) :-
-	obj_name(Obj, Label, Type),
+obj_result(Name-Obj, json([ label=Label,
+			    class=Type,
+			    href=Href
+			  | Extra
+			  ])) :-
+	obj_name(Name-Obj, Label, Type),
 	(   prolog:doc_object_href(Obj, Href)
 	->  true
 	;   object_href(Obj, Href)
@@ -160,6 +168,8 @@ obj_tag(Name/Arity, Extra) :-
 	predicate_property(system:Head, iso), !,
 	Extra = [tag=iso].
 obj_tag(f(_Func/_Arity), [tag=function]) :- !.
+obj_tag(section(_), [tag=section]) :- !.
+obj_tag(wiki(_), [tag=wiki]) :- !.
 obj_tag(_, []).
 
 
@@ -167,22 +177,29 @@ obj_tag(_, []).
 %
 %	Provide the (autocomplete) label for Object   and its class. The
 %	class may be used to style the hit in www/css/plweb.css.
+%
+%	@tbd: There are a lot of similar things around in the code.
 
-obj_name(Object, Label, Class) :-
+obj_name(Label-section(_), Label, section) :- !.
+obj_name(Label-wiki(_), Label, section) :- !.
+obj_name(_Name-Obj, Label, Class) :-
+	obj_name2(Obj, Label, Class).
+
+obj_name2(Object, Label, Class) :-
 	prolog:doc_object_label_class(Object, Label, Class), !.
-obj_name(c(Function), Name, cfunc) :- !,
+obj_name2(c(Function), Name, cfunc) :- !,
 	atom_concat(Function, '()', Name).
-obj_name(f(Func/Arity), Name, function) :- !,
+obj_name2(f(Func/Arity), Name, function) :- !,
 	format(atom(Name), '~w/~w', [Func, Arity]).
-obj_name(_:Term, Name, pred) :- !,
+obj_name2(_:Term, Name, pred) :- !,
 	format(atom(Name), '~w', [Term]).
-obj_name(Name/Arity, Label, Class) :-
+obj_name2(Name/Arity, Label, Class) :-
 	current_predicate(system:Name/Arity),
 	functor(Head, Name, Arity),
 	predicate_property(system:Head, built_in), !,
 	format(atom(Label), '~w/~w', [Name, Arity]),
 	Class = builtin.
-obj_name(Term, Name, pred) :-
+obj_name2(Term, Name, pred) :-
 	format(atom(Name), '~w', [Term]).
 
 first_n(0, _, []) :- !.
@@ -214,38 +231,68 @@ ac_object(MatchHow, Term, Match) :-
 
 :- dynamic
 	prefix_map/2,			% name-map, token-map
-	name_object/3.
+	name_object/3,
+	token_map_up_to_date/0.
 
+prefix_index(ByName, ByToken) :-
+	prefix_map(ByName, ByToken),
+	token_map_up_to_date, !.
 prefix_index(ByName, ByToken) :-
 	with_mutex(autocomplete,
 		   create_prefix_index(ByName, ByToken)).
 
 create_prefix_index(ByName, ByToken) :-
-	prefix_map(ByName, ByToken), !.
+	prefix_map(ByName, ByToken),
+	token_map_up_to_date, !.
 create_prefix_index(ByName, ByToken) :-
-	rdf_new_literal_map(ByName),
-	rdf_new_literal_map(ByToken),
-	assertz(prefix_map(ByName, ByToken)),
-	fill_token_map.
+	(   prefix_map(ByName, ByToken)
+	->  true
+	;   rdf_new_literal_map(ByName),
+	    rdf_new_literal_map(ByToken),
+	    assertz(prefix_map(ByName, ByToken))
+	),
+	fill_token_map,
+	assertz(token_map_up_to_date).
+
+%%	update_autocompletion_map
+%
+%	Assert that the token map is out of data.
+
+update_autocompletion_map :-
+	retractall(token_map_up_to_date).
+
+%%	fill_token_map is det.
+%
+%	Examine  the  objects  that  are  suitable  for  autocompletion,
+%	building:
+%
+%	  - name_object(Name, Object, Category)
+%	  - Two RDF literal maps, one with the Name of the object and
+%	    one with all tokens in Name.
 
 fill_token_map :-
 	prefix_map(ByName, ByToken),
 	rdf_reset_literal_map(ByName),
 	rdf_reset_literal_map(ByToken),
 	retractall(name_object(_,_,_)),
-	(   documented(Obj, Category),
-	    completion_target(Obj, Name),
+	(   documented(Obj0, Category, Summary),
+	    completion_target(Obj0, Summary, Obj, Name),
 	    assertz(name_object(Name, Obj, Category)),
 	    rdf_insert_literal_map(ByName, Name, Name),
-	    forall(start_inside_token(Name, Token),
+	    forall(sub_token(Name, Token),
 		   rdf_insert_literal_map(ByToken, Token, Name)),
 	    fail
 	;   true
 	),
 	keep_best_doc.
 
-documented(Obj, Category) :-
-	prolog:doc_object_summary(Obj, Category, _Section, _Summary).
+documented(Obj, Category, Summary) :-
+	prolog:doc_object_summary(Obj, Category, _Section, Summary).
+
+%%	keep_best_doc is det.
+%
+%	Filter  the  documentation  objects    found  in  name_object/3,
+%	removing `inferior' objects.
 
 keep_best_doc :-
 	(   name_object(Name, Obj, Category),
@@ -264,6 +311,18 @@ better_category(manual, _) :- !.
 better_category(packages, _) :- !.
 
 
+%%	completion_target(+Object0, +Summary, -Object, -Name) is semidet.
+%
+%	True when we can do completion on Object based on Name.
+
+completion_target(section(_,_,Id,_), SummaryS, section(Id), Summary) :- !,
+	\+ sub_atom(Id, 0, _, _, 'sec:summary'),
+	atom_string(Summary, SummaryS).		% literal maps do not use strings
+completion_target(wiki(Location), SummaryS, wiki(Location), Summary) :- !,
+	atom_string(Summary, SummaryS).		% literal maps do not use strings
+completion_target(Object, _, Object, Name) :-
+	completion_target(Object, Name).
+
 completion_target(Name/_,   Name).
 completion_target(M:Name/A, Name) :-
 	functor(Head, Name, A),
@@ -271,6 +330,18 @@ completion_target(M:Name/A, Name) :-
 completion_target(f(Name/_),Name).
 completion_target(c(Name),  Name).
 
-start_inside_token(Token, Inside) :-
-	sub_atom(Token, _, _, L, '_'),
-	sub_atom(Token, _, L, 0, Inside).
+%%	sub_token(+Label, -Token) is nondet.
+
+sub_token(Label, Token) :-
+	catch(tokenize_atom(Label, [_|Tokens]), _, fail),
+	member(Token, Tokens),
+	atom(Token),
+	downcase_atom(Token, Lower),
+	\+ stop_token(Lower).
+
+stop_token('_').
+stop_token('(').
+stop_token(')').
+stop_token(':').
+stop_token(a).
+stop_token(the).

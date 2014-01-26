@@ -100,6 +100,7 @@ page_style(pack(_Action),	   []).
 page_style(tags(_Action),	   []).
 page_style(pldoc(object(Obj)),	   [object(Obj)]) :- !.
 page_style(pldoc(_),		   []).
+page_style(pack(_Type, _Title),	   []).
 
 %%	outer_container(+Content, +Options)//
 %
@@ -318,10 +319,11 @@ page_title(Term) -->
 
 swi_logo -->
 	{ http_absolute_location(icons('swipl.png'), Logo, []) },
-	html(img([ class(owl),
-		   src(Logo),
-		   alt('SWI-Prolog owl logo')
-		 ], [])).
+	html(a(href('http://www.swi-prolog.org'),
+	       img([ class(owl),
+		     src(Logo),
+		     alt('SWI-Prolog owl logo')
+		   ], []))).
 
 
 %%	menubar(+Style)// is semidet
@@ -421,6 +423,8 @@ menu(Style,
 	 'News'                = '/news',
 	 'Mail list'           = '/Mailinglist.txt',
 	 'Bug tracker'	       = '/bugzilla/',
+	 'Submit a patch'      = '/howto/SubmitPatch.html',
+	 'Submit an add-on'    = '/howto/Pack.html',
 	 'External links'      = '/Links.html',
 	 'Contact'             = '/Contact.html',
 	 'SWI-Prolog items'    = '/loot.html'

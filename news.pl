@@ -1,8 +1,9 @@
-/** <module> News on the SWI-Prolog Web site
+/*  Part of SWI-Prolog
 
+    Author:        Wouter Beek & Jan Wielemaker
     E-mail:        J.Wielemaker@cs.vu.nl
     WWW:           http://www.swi-prolog.org
-    Copyright (C): 2013, VU University Amsterdam
+    Copyright (C): 2013-2014, VU University Amsterdam
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
@@ -24,12 +25,6 @@
     by the GNU General Public License. This exception does not however
     invalidate any other reasons why the executable file might be covered by
     the GNU General Public License.
-
-    @author Wouter Beek
-    @tbd Calculate relevance based on freshness lifetime and importance.
-    @tbd User-specific influencing of relevance. Based on login
-         / based on cookies.
-    @version 2013/12
 */
 
 :- module(news,
@@ -40,16 +35,25 @@
 :- use_module(library(random)).
 :- use_module(library(http/html_head)).
 :- use_module(library(http/html_write)).
-:- use_module(library(http/http_client)).
 :- use_module(library(http/http_dispatch)).
-:- use_module(library(http/http_path)).
-:- use_module(library(http/json_convert)).
+:- use_module(library(pldoc/doc_html)).
 :- use_module(post).
 
 :- html_resource(css('news.css'), [requires([css('post.css')])]).
 
 :- http_handler(root(news), news_process, [prefix]).
 :- http_handler(root(news/archive), news_archive, []).
+
+/** <module> News on the SWI-Prolog Web site
+
+@author Wouter Beek
+@tbd Calculate relevance based on freshness lifetime and importance.
+@tbd User-specific influencing of relevance. Based on login/based on cookies.
+@version 2013/12
+*/
+
+
+
 
 %%	news_process(+Request)
 %
@@ -59,19 +63,24 @@
 %	  2. GET to /news/ to render the _fresh_ news.
 %	  3. POST provides a REST API for managing news.
 
-news_process(Request) :-
+news_process(Request) :-			% list specific article
 	memberchk(method(get), Request),
 	request_to_id(Request, news, Post),
 	Post \== '', !,
 	post(Post, title, Title1),
+	post(Post, kind, Kind),
+	(   post(Post, object, Object)
+	->  true
+	;   Object = null
+	),
 	atomic_list_concat(['News',Title1], ' -- ', Title2),
 	reply_html_page(
 	    news(Post),
 	    title(Title2),
 	    [ \post(Post, []),
-	      \news_backlink
+	      \news_backlink(Kind, Object)
 	    ]).
-news_process(Request) :-
+news_process(Request) :-			% list fresh news
 	memberchk(method(get), Request), !,
 	find_posts(news, fresh, Ids),
 	Title = 'News',
@@ -79,10 +88,28 @@ news_process(Request) :-
 	    news(fresh),
 	    title(Title),
 	    [ \html_requires(css('news.css')),
-	      \posts(news, null, Ids)
+	      \posts(news, null, Ids,
+		     [ order_by(created),
+		       add_add_link(false)
+		     ]),
+	      \news_archive_link(news, Ids),
+	      \add_post_link(news, null)
 	    ]).
-news_process(Request) :-
+news_process(Request) :-			% handle editing news
 	post_process(Request, news).
+
+news_archive_link(Kind, Ids) -->
+	{ find_posts(Kind, all, All),
+	  length(All, Total)
+	},
+	(   { length(Ids, Total) }
+	->  []
+	;   { http_link_to_id(news_archive, [], HREF)
+	    },
+	    html(div(class('news-archive-link'),
+		     a(href(HREF), 'View all ~D news articles'-[Total])))
+	).
+
 
 %%	news_archive(+Request) is det.
 %
@@ -90,13 +117,24 @@ news_process(Request) :-
 
 news_archive(_Request):-
 	find_posts(news, all, Ids),
-	reply_html_page(news(all),
-			title('News archive'),
-			\posts(news, null, Ids)).
 
-news_backlink -->
+	reply_html_page(
+	    news(all),
+	    title('News archive'),
+	    [ \posts(news, null, Ids,
+		     [ order_by(created),
+		       add_add_link(false)
+		     ]),
+	      \news_backlink(news, null),
+	      \add_post_link(news, null)
+	    ]).
+
+news_backlink(news, _Object) --> !,
 	{ http_link_to_id(news_process, [], Link) },
-	html(a(href=Link, 'Back to list of news items')).
+	html(a(href=Link, 'Back to fresh news items')).
+news_backlink(_Kind, Object) -->
+	html('View annotation in context of '),
+	object_ref(Object, [style(title)]).
 
 %!	random_news// is semidet.
 %

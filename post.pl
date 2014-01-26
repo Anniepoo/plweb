@@ -37,9 +37,8 @@
 					% ?Name:atom
 					% ?Value
 	    post//2,			% +Post, +Options
-	    posts//3,			% +Kind:oneof([annotation,news])
-					% +Object
-					% +Ids:list(atom)
+	    posts//4,			% +Kind, +Object, +Ids, +Options
+	    add_post_link//2,		% +Kind, +Object
 	    relevance/2,		% +Id:atom
 					% -Relevance:between(0.0,1.0)
 	    post_process/2,		% +Request:list, +Id:atom
@@ -506,20 +505,34 @@ post_votes(Id) -->
 	     ]).
 
 
-%%	posts(+Kind, +Object, +Ids:list(atom))//
+%%	posts(+Kind, +Object, +Ids:list(atom), +Options)//
 %
 %	Generate HTML for a list of posts and add a link to add new
-%	posts.
+%	posts.  Options:
+%
+%	  * order_by(+Property)
+%	  Order posts by Property.  Properties are defined by post/3.
+%	  * add_add_link(+Boolean)
+%	  Add link to add new posts.  Default is =true=.
 
-posts(Kind, Object, Ids1) -->
+posts(Kind, Object, Ids1, Options) -->
 	{ atomic_list_concat([Kind,component], '-', Class),
-	  sort_posts(Ids1, votes, Ids2)
+	  default_order(Kind, DefOrder),
+	  option(order_by(OrderBy), Options, DefOrder),
+	  sort_posts(Ids1, OrderBy, Ids2)
 	},
 	html_requires(css('post.css')),
 	html([ div(class=[posts,Class],
-		   \post_list(Ids2, Kind, none)),
-	       \add_post(Kind, Object)
-	     ]).
+		   \post_list(Ids2, Kind, none))
+	     ]),
+	(   { option(add_add_link(true), Options, true) }
+	->  add_post_link(Kind, Object)
+	;   []
+	).
+
+default_order(news, created).
+default_order(annotation, votes).
+
 
 post_list([], _Kind, _Orient) --> [].
 post_list([Id|Ids], Kind, Orient1) -->
@@ -532,11 +545,11 @@ switch_orientation(right, left).
 switch_orientation(none,  none).
 
 
-%%	add_post(+Kind, +Object)//
+%%	add_post_link(+Kind, +Object)//
 %
 %	Emit HTML that allows for adding a new post
 
-add_post(Kind, Object) -->
+add_post_link(Kind, Object) -->
 	{ site_user_logged_in(User),
 	  post_granted(User, Kind),
 	  (   Object == null
@@ -557,7 +570,7 @@ add_post(Kind, Object) -->
 			      ])),
 		   \write_post_js(Kind, About)
 		 ])).
-add_post(Kind, _) -->
+add_post_link(Kind, _) -->
 	login_post(Kind).
 
 add_post_content(Id) -->
