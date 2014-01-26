@@ -1,0 +1,5 @@
+---+ Install Wizard
+---++ osselect
+---+ Operating System Selection
+This wizard will help you select, install, and get started with the best version of SWI-Prolog for your application.
+Select your operating system to proceed:

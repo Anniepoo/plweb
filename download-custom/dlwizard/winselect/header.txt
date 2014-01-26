@@ -1,0 +1,20 @@
+---+ Install Wizard
+---++ winselect
+---+ Download Windows Installer
+---++ 1. Select A Version
+For most users we recommend the binary install.
+Compiling is fiddly ([[How to compile][http://swi-prolog.org/build/windows.txt]]).
+
+---+++ 32 or 64 bit?
+Most users should select the same width as your OS. Windows 8, Windows 7, and Vista are 64 bit systems. Windows XP can be 32 or 64 bit. On older releases choose 32 bits ([[More info about choosing width for critical applications][http://swi-prolog.org/pldoc/man?section=64bits]]).
+
+---+++ Which Release Track?
+
+* Stable - Most students will be happiest with the stable release.
+* Development - Most other users will be happiest with development. There are fundamental changes to the language.
+* Daily - Latest commits to the git repository are built nightly. These should be considered _experimental_ .
+* Old - Older versions (on a separate page)
+
+---++ 2. Download and Install
+
+Click the appropriate download in table below  and run the installer.

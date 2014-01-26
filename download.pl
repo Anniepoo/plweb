@@ -40,17 +40,19 @@
 :- use_module(library(apply)).
 :- use_module(library(error)).
 :- use_module(library(filesex)).
+:- use_module(library(http/js_write)).
+:- use_module(library(http/html_head)).
 :- use_module(wiki).
-
-
-% Although orphaned, the old download scheme is retained for those with
-% build scripts
 
 
 %%	download(+Request) is det.
 %
 %	HTTP handler for SWI-Prolog download pages.
 
+% Although orphaned, the old download scheme is retained for those with
+% build scripts
+
+:- http_handler(download(dlwizard),	download_wizard,   [prefix]).
 :- http_handler(download(devel),        download_table, []).
 :- http_handler(download(stable),       download_table, []).
 :- http_handler(download(old),          download_table, []).
@@ -58,10 +60,97 @@
 :- http_handler(download(.),	        download,
 		[prefix, spawn(download), priority(10)]).
 
+%%	download_wizard(+Request)
+%
+%	Emit a page of the download wizard
+%
+download_wizard(Request) :-
+	memberchk(path(Path), Request),
+	http_absolute_location(root(download), DownLoadRoot, []),
+	atom_concat(DownLoadRoot, DownLoadDir, Path),
+	absolute_file_name(download(DownLoadDir),
+			   Dir,
+			   [ file_type(directory),
+			     access(read)
+			   ]),
+	(   wiki_file_to_dom(Dir, 'header.txt', Header0)
+	->  (   Header0 = [h1(_, Title), h2(_, [WizardPage])|Header],
+	        term_to_atom(WizardPageTerm, WizardPage)
+	    ->	true
+	    ;	Header = Header0,
+		WizardPageTerm = none
+	    )
+	;   Header = []
+	),
+	reply_html_page(
+	    download(Dir, Title),
+	    title('SWI-Prolog downloads'),
+	    [ \html(Header),
+	      br(clear(all)),
+	      \wizard(WizardPageTerm),
+	      \wiki(Dir, 'footer.txt')
+	    ]).
+
+%%	wizard(+WizardPage) is det
+%
+%	Emit the page dependent part of a page of the install wizard
+wizard(osselect) -->
+	{
+	    http_absolute_location(download('dlwizard/winselect'), PathWin, []),
+	    http_absolute_location(download('dlwizard/macselect'), PathMac, []),
+	    http_absolute_location(download('dlwizard/linuxselect'), PathLinux, [])
+        },
+	html([
+	    \html_requires(css('download.css')),
+	    div(class(selectbuttonbar), [
+		span(a(href(PathWin), 'Windows')),
+		span(a(href(PathMac), 'Mac OS X')),
+		span(a(href(PathLinux), 'Linux'))
+	    ])
+	]).
+wizard(winselect) -->
+	html([
+	    \list_files('download/stable', bin, bin, 'Binaries', []),
+	    \wiki('download/stable/', 'footer.txt'),
+	    \wiki('download/devel/', 'footer.txt')
+	]).
+wizard(none) -->
+	html([p('Something wrong, no page')]).
+wizard(WizardPage) -->
+	html([p(['Something wrong, bad pagetype', WizardPage])]).
+
+radio_enable(Label, Path) -->
+	{
+	     random(R),
+	     format(atom(RA), 'radio~w', [R])
+        },
+	html(p([
+	    input([type(radio), name(r), value(Label), id(RA),
+		   onClick(
+'document.getElementById(\'nextbutton\').disabled = false;\n' +
+'document.getElementById(\'' + RA + '\').action = \'' + Path + '\';'
+		      )], []),
+	    label([for(RA)], Label)
+
+	     ])).
+
+prev_button(blank) -->
+	html(div(class(wizardblank), &(nbsp))).
+next_button(blank) -->
+	prev_button(blank).
+
+progress_bar(Location) -->
+	html(span(['Step ', Location, ' of 6'])).
+
+
+		 /*******************************
+		 *	   Old Version		*
+		 *******************************/
+
+
 %%	download_table(+Request)
 %
 %	Provide a table with possible download targets.
-%	test edit
 
 download_table(Request) :-
 	http_parameters(Request,

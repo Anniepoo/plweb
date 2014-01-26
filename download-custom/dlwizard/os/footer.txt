@@ -1,0 +1,7 @@
+---++ Steps
+1. *Select OS*
+2. Select Version & Download
+3. Install/Build
+4. Test installation _optional_
+5. Getting Started _optional_
+6. Learning More _optional_

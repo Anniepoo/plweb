@@ -1,0 +1,16 @@
+
+---++ 3. Proceed to Next Step
+
+[[Next Step][http://swi-prolog.org/download/dlwizard/wintestinstall]]
+
+---++ Troubleshooting
+
+This should be a place for issues that would be obvious on first running the installer (eg installer crashes).
+
+---++ Steps
+1. Select OS (Windows)
+2. *Select Version & Download*
+3. Install/Build
+4. Test installation _optional_
+5. Getting Started _optional_
+6. Learning More _optional_
